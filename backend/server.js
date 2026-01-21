@@ -4,20 +4,36 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
+
+/* ✅ HTTP CORS (API safety) */
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://matchmatee.netlify.app"
+  ],
+  credentials: true
+}));
 
 const server = http.createServer(app);
 
+/* ✅ SOCKET.IO CONFIG (MOST IMPORTANT FIX) */
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: [
+      "http://localhost:5173",
+      "https://matchmatee.netlify.app"
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
   },
+  transports: ["websocket"] // 🔥 FORCE websocket (mobile fix)
 });
 
-// 🔥 store ONLY socket IDs
-let waitingQueue = [];   // [socketId]
+/* 🔥 RELIABLE ONLINE USER TRACKING */
+let onlineUsers = new Set(); // instead of number
+
+let waitingQueue = [];   // socketId[]
 let userPairs = {};      // socketId -> socketId
-let onlineUsers = 0;     // ✅ REAL ONLINE COUNT
 
 // 🧹 clean pair helper
 function cleanPair(socketId) {
@@ -25,7 +41,6 @@ function cleanPair(socketId) {
 
   if (partnerId) {
     io.to(partnerId).emit("partner_left");
-
     delete userPairs[partnerId];
     delete userPairs[socketId];
   }
@@ -38,10 +53,7 @@ function tryMatch() {
   const a = waitingQueue.shift();
   const b = waitingQueue.shift();
 
-  if (a === b) {
-    waitingQueue.push(a);
-    return;
-  }
+  if (!a || !b || a === b) return;
 
   userPairs[a] = b;
   userPairs[b] = a;
@@ -51,66 +63,56 @@ function tryMatch() {
 }
 
 io.on("connection", (socket) => {
-  // 🟢 user online
-  onlineUsers++;
-  io.emit("online_count", onlineUsers);
+  /* 🟢 USER CONNECTED */
+  onlineUsers.add(socket.id);
+  io.emit("online_count", onlineUsers.size);
 
-  // 🔍 find match
+  /* 🔍 FIND MATCH */
   socket.on("find_match", () => {
-    if (waitingQueue.includes(socket.id)) return;
-
-    waitingQueue.push(socket.id);
-    tryMatch();
+    if (!waitingQueue.includes(socket.id)) {
+      waitingQueue.push(socket.id);
+      tryMatch();
+    }
   });
 
-  // ✉️ message
+  /* ✉️ SEND MESSAGE */
   socket.on("send_message", (message) => {
     const partnerId = userPairs[socket.id];
-    if (!partnerId) return;
-
-    io.to(partnerId).emit("receive_message", {
-      text: message,
-    });
+    if (partnerId) {
+      io.to(partnerId).emit("receive_message", { text: message });
+    }
   });
 
-  // ✍️ TYPING INDICATOR (NEW)
+  /* ✍️ TYPING */
   socket.on("typing", () => {
     const partnerId = userPairs[socket.id];
-    if (partnerId) {
-      io.to(partnerId).emit("partner_typing");
-    }
+    if (partnerId) io.to(partnerId).emit("partner_typing");
   });
 
   socket.on("stop_typing", () => {
     const partnerId = userPairs[socket.id];
-    if (partnerId) {
-      io.to(partnerId).emit("partner_stop_typing");
-    }
+    if (partnerId) io.to(partnerId).emit("partner_stop_typing");
   });
 
-  // ⏭ skip
+  /* ⏭ SKIP */
   socket.on("skip", () => {
     cleanPair(socket.id);
-
     waitingQueue = waitingQueue.filter(id => id !== socket.id);
     waitingQueue.push(socket.id);
-
     tryMatch();
   });
 
-  // ❌ disconnect
+  /* ❌ DISCONNECT */
   socket.on("disconnect", () => {
     cleanPair(socket.id);
     waitingQueue = waitingQueue.filter(id => id !== socket.id);
 
-    onlineUsers--;
-    io.emit("online_count", onlineUsers);
+    onlineUsers.delete(socket.id);
+    io.emit("online_count", onlineUsers.size);
   });
 });
 
 const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
-
