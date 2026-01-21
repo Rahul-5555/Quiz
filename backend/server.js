@@ -9,7 +9,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://matchmate-8yop.onrender.com"
+    "https://matchmatee.netlify.app/"
   ],
   credentials: true
 }));
@@ -21,7 +21,7 @@ const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:5173",
-      "https://matchmate-8yop.onrender.com"
+      "https://matchmatee.netlify.app/"
     ],
     methods: ["GET", "POST"],
     credentials: true
