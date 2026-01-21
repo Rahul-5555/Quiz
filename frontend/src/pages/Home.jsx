@@ -5,15 +5,15 @@ import StatBar from "../components/StatBar";
 import Matching from "./Matching";
 import Chat from "./Chat";
 
-// 🖼 HERO IMAGE
 import heroImg from "../assets/heroS.png";
+import Header from "../components/Header";
 
 const Home = () => {
   const [stage, setStage] = useState("home");
   const [socket, setSocket] = useState(null);
   const socketRef = useRef(null);
 
-  // 🔌 SOCKET INIT
+  // 🔌 SOCKET INIT (UNCHANGED)
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL, {
       transports: ["websocket"],
@@ -23,187 +23,104 @@ const Home = () => {
     socketRef.current = s;
     setSocket(s);
 
-    s.on("connect", () => {
-      console.log("🟢 Socket connected:", s.id);
-    });
-
-    return () => {
-      s.disconnect();
-    };
+    return () => s.disconnect();
   }, []);
 
-  const startMatching = () => {
-    setStage("matching");
-  };
+  const startMatching = () => setStage("matching");
 
-  // 🔄 MATCHING
   if (stage === "matching" && socket) {
     return <Matching socket={socket} onMatched={() => setStage("chat")} />;
   }
 
-  // 💬 CHAT
   if (stage === "chat" && socket) {
     return <Chat socket={socket} onEnd={() => setStage("matching")} />;
   }
 
-  // 🏠 HOME
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #020617, #0f172a)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "24px",
-        color: "white",
-      }}
-    >
-      {/* HERO CARD */}
-      <div
-        style={{
-          position: "relative",
-          maxWidth: "1100px",
-          width: "100%",
-          height: "520px",
-          borderRadius: "32px",
-          overflow: "hidden",
-          boxShadow: "0 40px 80px rgba(0,0,0,0.7)",
-        }}
-      >
-        {/* IMAGE */}
-        <img
-          src={heroImg}
-          alt="Anonymous people sitting apart"
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            filter: "brightness(0.85)",
-          }}
-        />
+    <>
+      {/* 🔰 LOGO */}
+      <div className="fixed top-4 left-4 z-50">
+        <span className="text-lg font-bold text-white">
+          ♟ MatchMate
+        </span>
+      </div>
 
-        {/* DARK OVERLAY */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(2,6,23,0.85) 20%, rgba(2,6,23,0.4) 55%, rgba(2,6,23,0.1))",
-          }}
-        />
 
-        {/* 🔰 BRAND NAME */}
-        {/* 🔰 BRAND NAME */}
+      {/* 🏠 PAGE */}
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 flex flex-col items-center justify-center pt-28 px-4 text-white">
+
+        {/* HERO CARD */}
         <div
-          style={{
-            position: "absolute",
-            top: "28px",
-            left: "32px",
-            padding: "10px 18px",
-            borderRadius: "999px",
-            background: "rgba(255,255,255,0.08)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            fontSize: "20px",
-            fontWeight: "800",
-            letterSpacing: "1px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-          }}
+          className="relative w-full max-w-5xl
+                     h-[420px] sm:h-[480px] md:h-[520px]
+                     rounded-[32px] overflow-hidden
+                     shadow-[0_40px_80px_rgba(0,0,0,0.75)]"
         >
-          ♟
-          <span
-            style={{
-              background: "linear-gradient(135deg, #38bdf8, #6366f1)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            MatchMate
-          </span>
+          {/* IMAGE */}
+          <img
+            src={heroImg}
+            alt="Anonymous people chatting"
+            className="w-full h-full object-cover"
+          />
+
+          {/* OVERLAY */}
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/70 to-slate-950/30" />
+
+          {/* HERO TEXT (ONLY TEXT INSIDE IMAGE) */}
+          <div className="absolute top-10 left-6 right-6 sm:left-10 sm:max-w-md">
+            <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">
+              Talk Freely.
+              <br />
+              <span className="bg-gradient-to-r from-sky-400 to-indigo-500 bg-clip-text text-transparent">
+                Stay Anonymous.
+              </span>
+            </h1>
+
+            <p className="mt-3 text-sm sm:text-base text-white/85">
+              Meet random people worldwide. No login. No profile.
+              Just honest conversations.
+            </p>
+
+            <div className="mt-4">
+              {socket && <StatBar socket={socket} />}
+            </div>
+          </div>
         </div>
 
-
-        {/* TEXT OVER IMAGE */}
-        <div
-          style={{
-            position: "absolute",
-            left: "48px",
-            bottom: "48px",
-            maxWidth: "420px",
-          }}
-        >
-          <h1
-            style={{
-              fontSize: "44px",
-              fontWeight: "800",
-              lineHeight: "1.1",
-            }}
-          >
-            Talk Freely.
-            <br />
-            <span
-              style={{
-                background:
-                  "linear-gradient(135deg, #38bdf8, #6366f1)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Stay Anonymous.
-            </span>
-          </h1>
-
-          <p
-            style={{
-              marginTop: "14px",
-              fontSize: "15px",
-              opacity: 0.85,
-            }}
-          >
-            Meet random people worldwide. No login. No profile.
-            Just honest conversations.
-          </p>
-
-          {/* ONLINE USERS */}
-          <div style={{ marginTop: "16px" }}>
-            <StatBar socket={socket} />
-          </div>
-
-          {/* CTA */}
+        {/* 🔽 CTA SECTION (OUTSIDE IMAGE) */}
+        <div className="mt-8 flex flex-col items-center text-center">
           <button
             onClick={startMatching}
-            style={{
-              marginTop: "22px",
-              padding: "16px 34px",
-              borderRadius: "999px",
-              border: "none",
-              fontSize: "15px",
-              fontWeight: "600",
-              cursor: "pointer",
-              color: "white",
-              background:
-                "linear-gradient(135deg, #2563eb, #4f46e5)",
-              boxShadow: "0 18px 36px rgba(79,70,229,0.5)",
-            }}
+            className="px-10 py-3 rounded-full text-sm font-semibold
+                       bg-gradient-to-r from-blue-600 to-indigo-600
+                       shadow-xl
+                       hover:scale-[1.05] active:scale-[0.97]
+                       transition-all duration-200
+                       focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-indigo-400"
           >
             🌐 Start Random Chat
           </button>
+          <br />
+          {/* 🎥 VIDEO COMING SOON */}
+          <button className="px-10 py-3 rounded-full text-sm font-semibold
+                       bg-gradient-to-r from-blue-600 to-indigo-600
+                       shadow-xl
+                       hover:scale-[1.05] active:scale-[0.97]
+                       transition-all duration-200
+                       focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-indigo-400">
+            🎥 Video call coming soon
+          </button>
 
-          <p
-            style={{
-              marginTop: "12px",
-              fontSize: "12px",
-              opacity: 0.6,
-            }}
-          >
-            No login • No history • 100% anonymous
-          </p>
+
+
+
         </div>
+
+        <Header />
       </div>
-    </div>
+    </>
   );
 };
 
