@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import useWebRTC from "../hooks/useWebRTC";
 import useVoiceActivity from "../hooks/useVoiceActivity";
 
-const CALL_DURATION = 15; // seconds
+const CALL_DURATION = 10 * 60;
 
 const AudioCall = ({ socket, matchId, onEnd }) => {
   const {
@@ -47,7 +47,8 @@ const AudioCall = ({ socket, matchId, onEnd }) => {
     return () => clearInterval(timerRef.current);
   }, []);
 
-  /* ❌ END CALL */
+  // test
+  /* ❌ END CALL Button */
   const handleEnd = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
