@@ -9,7 +9,7 @@ const app = express();
 app.use(
   cors({
     origin: true,
-    origin: allowedOrigins,
+    // origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -20,7 +20,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: true,
-    origin: allowedOrigins,
+    // origin: allowedOrigins,
     credentials: true,
   },
   transports: ["polling", "websocket"],
