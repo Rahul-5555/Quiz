@@ -19,7 +19,7 @@ const Home = () => {
   // 🔌 SOCKET INIT
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL, {
-      transports: ["websocket"],
+      transports: ["polling", "websocket"], // ✅,
       withCredentials: true,
     });
 

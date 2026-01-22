@@ -21,7 +21,8 @@ const io = new Server(server, {
     origin: true,
     credentials: true,
   },
-  transports: ["websocket"],
+  transports: ["polling", "websocket"],
+  allowUpgrades: true,
 });
 
 /* 🔥 STATE */
