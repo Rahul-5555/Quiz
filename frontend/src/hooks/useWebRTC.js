@@ -4,7 +4,7 @@ const ICE_SERVERS = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
 
-const CALL_DURATION_MS = 15 * 1000;
+const CALL_DURATION_MS = 10 * 15 * 1000;
 // 🔁 PROD: 10 * 60 * 1000
 
 const useWebRTC = (socket, matchId) => {
