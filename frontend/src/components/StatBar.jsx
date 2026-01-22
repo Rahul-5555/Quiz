@@ -6,36 +6,33 @@ const StatBar = ({ socket }) => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleOnlineCount = (count) => {
-      setOnline(count);
-    };
+    const handleOnlineCount = (count) => setOnline(count);
 
-    // 👇 LISTEN
     socket.on("online_count", handleOnlineCount);
-
-    // 👇 ASK server explicitly (THIS FIXES 0 BUG)
     socket.emit("get_online_count");
 
-    return () => {
-      socket.off("online_count", handleOnlineCount);
-    };
+    return () => socket.off("online_count", handleOnlineCount);
   }, [socket]);
 
   return (
-    <div
-      style={{
-        marginTop: "28px",
-        padding: "12px 16px",
-        borderRadius: "14px",
-        background: "rgba(255,255,255,0.05)",
-        display: "flex",
-        justifyContent: "space-between",
-        fontSize: "13px",
-        color: "white",
-      }}
-    >
-      <span>👥 {online} Online</span>
-      <span>🔴 Matching…</span>
+    <div className="mt-7 mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl px-4 py-3 flex items-center justify-between shadow-lg">
+
+      {/* 👥 ONLINE COUNT */}
+      <div className="flex items-center gap-2 text-sm font-medium text-white">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
+        </span>
+        <span>{online} Online</span>
+      </div>
+
+      {/* 🔴 MATCHING STATUS */}
+      <div className="flex items-center gap-2 text-sm text-white/70">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 animate-pulse" />
+        </span>
+        Matching…
+      </div>
     </div>
   );
 };
