@@ -91,7 +91,7 @@ function tryMatch() {
     cleanPair(b);
 
     delete matchTimers[matchId];
-  }, 15 * 1000); // 10 minutes
+  }, 10 * 60 * 1000); // 10 minutes
 
   matchTimers[matchId] = timer;
 }
