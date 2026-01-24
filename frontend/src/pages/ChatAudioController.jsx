@@ -1,49 +1,52 @@
 import { useEffect, useRef } from "react";
 import AudioCall from "../components/AudioCall";
+import useWebRTC from "../hooks/useWebRTC";
 
 const ChatAudioController = ({
   socket,
   matchId,
-  mode,
   audioOn,
   setAudioOn,
+  isCaller,
 }) => {
-  const autoStartedRef = useRef(false);
+  const startedRef = useRef(false);
 
-  /* 🔥 AUTO START AUDIO IF MODE === audio */
+  const webrtc = useWebRTC(socket, matchId);
+  const { startCall, endCall } = webrtc;
+
+  /* ▶️ START CALL (CALLER ONLY) */
   useEffect(() => {
-    if (mode === "audio" && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      setAudioOn(true);
-    }
-  }, [mode, setAudioOn]);
+    if (!audioOn) return;
+    if (!isCaller) return;
+    if (startedRef.current) return;
 
-  /* ✅ LISTEN WHEN OTHER PERSON CUTS CALL */
+    startedRef.current = true;
+    console.log("🎤 Caller starting WebRTC");
+    startCall();
+  }, [audioOn, isCaller, startCall]);
+
+  /* 🔔 SERVER END */
   useEffect(() => {
     if (!socket) return;
 
-    const handleRemoteEnd = ({ matchId: endedMatchId }) => {
-      if (endedMatchId === matchId) {
-        setAudioOn(false); // 🔇 B ka audio bhi band
-      }
+    const handleEnd = () => {
+      setAudioOn(false);
+      startedRef.current = false;
     };
 
-    socket.on("audio-call-ended", handleRemoteEnd);
-
-    return () => {
-      socket.off("audio-call-ended", handleRemoteEnd);
-    };
-  }, [socket, matchId, setAudioOn]);
+    socket.on("call-ended", handleEnd);
+    return () => socket.off("call-ended", handleEnd);
+  }, [socket, setAudioOn]);
 
   if (!audioOn) return null;
 
   return (
     <AudioCall
-      socket={socket}
-      matchId={matchId}
+      {...webrtc}
       onEnd={() => {
-        setAudioOn(false); // 🔊 sirf local
-        socket.emit("audio-call-ended", { matchId }); // 🔥 notify other
+        endCall();
+        setAudioOn(false);
+        startedRef.current = false;
       }}
     />
   );

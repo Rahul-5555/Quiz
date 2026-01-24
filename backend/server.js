@@ -47,10 +47,10 @@ const matchTimers = {};
 
 /* 🧹 END MATCH (SINGLE SOURCE OF TRUTH) */
 function endMatch(socketId, reason = "ended") {
+  if (!userRooms[socketId]) return;
+
   const partnerId = userPairs[socketId];
   const matchId = userRooms[socketId];
-
-  if (!partnerId || !matchId) return;
 
   // clear timer
   if (matchTimers[matchId]) {
@@ -58,12 +58,14 @@ function endMatch(socketId, reason = "ended") {
     delete matchTimers[matchId];
   }
 
-  // notify both
+  // notify both users
   io.to(matchId).emit("call-ended", { reason });
 
-  // leave room
-  io.sockets.sockets.get(socketId)?.leave(matchId);
-  io.sockets.sockets.get(partnerId)?.leave(matchId);
+  // delay room leave to avoid race condition
+  setTimeout(() => {
+    io.sockets.sockets.get(socketId)?.leave(matchId);
+    io.sockets.sockets.get(partnerId)?.leave(matchId);
+  }, 100);
 
   // cleanup
   delete userPairs[socketId];
@@ -84,7 +86,8 @@ function tryMatch() {
   const b = waitingQueue.shift();
   if (!a || !b || a === b) return;
 
-  const matchId = `match_${a}_${b}`;
+  const matchId =
+    "match_" + Date.now() + "_" + Math.random().toString(36).slice(2);
 
   userPairs[a] = b;
   userPairs[b] = a;
@@ -98,8 +101,8 @@ function tryMatch() {
   io.to(a).emit("match_found", { matchId, role: "caller" });
   io.to(b).emit("match_found", { matchId, role: "callee" });
 
+  // ⏱️ auto end after 10 minutes
   const timer = setTimeout(() => {
-    io.to(matchId).emit("match_timeout");
     endMatch(a, "timeout");
   }, 10 * 60 * 1000);
 
@@ -130,7 +133,9 @@ io.on("connection", (socket) => {
   /* 💬 CHAT */
   socket.on("send_message", (text) => {
     const partnerId = userPairs[socket.id];
-    if (partnerId) io.to(partnerId).emit("receive_message", { text });
+    if (partnerId) {
+      io.to(partnerId).emit("receive_message", { text });
+    }
   });
 
   /* 🎧 WEBRTC SIGNALING (MATCH SAFE) */

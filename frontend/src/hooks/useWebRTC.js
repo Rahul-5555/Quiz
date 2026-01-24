@@ -15,21 +15,46 @@ const useWebRTC = (socket, matchId) => {
   const pcRef = useRef(null);
   const micTrackRef = useRef(null);
   const pendingIceRef = useRef([]);
-
   const startedRef = useRef(false);
+  const prevMatchIdRef = useRef(null); // 🔥 IMPORTANT
 
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isMicReady, setIsMicReady] = useState(false);
 
+  /* ♻️ RESET ONLY WHEN MATCH ACTUALLY CHANGES (STRICTMODE SAFE) */
+  useEffect(() => {
+    if (!matchId) return;
+
+    if (prevMatchIdRef.current === matchId) return; // 🚫 SAME MATCH → SKIP
+
+    prevMatchIdRef.current = matchId;
+    console.log("♻️ Reset WebRTC for NEW match:", matchId);
+
+    startedRef.current = false;
+    pendingIceRef.current = [];
+
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+
+    setLocalStream(null);
+    setRemoteStream(null);
+    setIsMuted(false);
+    setIsMicReady(false);
+  }, [matchId]);
+
   /* 🔌 CREATE PEER CONNECTION */
   const createPeerConnection = useCallback(() => {
+    if (pcRef.current) return pcRef.current;
+
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     pc.ontrack = (e) => {
-      const remote = e.streams[0];
-      setRemoteStream(remote);
+      console.log("🔊 Remote stream received");
+      setRemoteStream(e.streams[0]);
     };
 
     pc.onicecandidate = (e) => {
@@ -45,16 +70,21 @@ const useWebRTC = (socket, matchId) => {
     return pc;
   }, [socket, matchId]);
 
-  /* ▶️ START CALL */
+  /* ▶️ START CALL (CALLER ONLY) */
   const startCall = useCallback(async () => {
     if (!socket || !matchId) return;
     if (startedRef.current) return;
 
-    startedRef.current = true;
-
     const pc = createPeerConnection();
 
-    /* 🎤 MIC */
+    if (pc.signalingState === "closed") {
+      console.warn("❌ PC already closed, abort startCall");
+      return;
+    }
+
+    startedRef.current = true;
+    console.log("🚀 WebRTC startCall");
+
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -63,26 +93,36 @@ const useWebRTC = (socket, matchId) => {
       },
     });
 
-    const track = stream.getAudioTracks()[0];
-    micTrackRef.current = track;
-
+    micTrackRef.current = stream.getAudioTracks()[0];
     setLocalStream(stream);
     setIsMicReady(true);
 
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+    stream.getTracks().forEach((track) => {
+      if (pc.signalingState !== "closed") {
+        pc.addTrack(track, stream);
+      }
+    });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    socket.emit("offer", { matchId, offer });
   }, [socket, matchId, createPeerConnection]);
 
-  /* 🔐 SOCKET SIGNALING (CLEAN & SAFE) */
+  /* 🔐 SIGNALING */
   useEffect(() => {
     if (!socket) return;
 
     const onOffer = async ({ offer }) => {
-      if (!pcRef.current) createPeerConnection();
+      const pc = createPeerConnection();
 
-      const pc = pcRef.current;
+      if (pc.signalingState !== "stable") {
+        console.warn("⚠️ Ignore offer, state:", pc.signalingState);
+        return;
+      }
+
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-      // 🔥 apply queued ICE
       for (const ice of pendingIceRef.current) {
         await pc.addIceCandidate(ice);
       }
@@ -90,13 +130,19 @@ const useWebRTC = (socket, matchId) => {
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+
       socket.emit("answer", { matchId, answer });
     };
 
     const onAnswer = async ({ answer }) => {
       if (!pcRef.current) return;
-
       const pc = pcRef.current;
+
+      if (pc.signalingState !== "have-local-offer") {
+        console.warn("⚠️ Ignore answer, state:", pc.signalingState);
+        return;
+      }
+
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
       for (const ice of pendingIceRef.current) {
@@ -108,9 +154,8 @@ const useWebRTC = (socket, matchId) => {
     const onIce = async ({ candidate }) => {
       if (!pcRef.current || !candidate) return;
 
-      const pc = pcRef.current;
-      if (pc.remoteDescription) {
-        await pc.addIceCandidate(candidate);
+      if (pcRef.current.remoteDescription) {
+        await pcRef.current.addIceCandidate(candidate);
       } else {
         pendingIceRef.current.push(candidate);
       }
@@ -137,21 +182,21 @@ const useWebRTC = (socket, matchId) => {
   const toggleMute = useCallback(() => {
     if (!micTrackRef.current) return;
 
-    const enabled = micTrackRef.current.enabled;
-    micTrackRef.current.enabled = !enabled;
-    setIsMuted(enabled);
+    micTrackRef.current.enabled = !micTrackRef.current.enabled;
+    setIsMuted(!micTrackRef.current.enabled);
 
-    socket.emit(enabled ? "mute" : "unmute");
+    socket.emit(micTrackRef.current.enabled ? "unmute" : "mute");
   }, [socket]);
 
   /* ❌ END CALL */
   const endCall = useCallback(
     (emit = true) => {
+      console.log("🧹 WebRTC cleanup");
+
       startedRef.current = false;
       pendingIceRef.current = [];
 
       if (pcRef.current) {
-        pcRef.current.getSenders().forEach((s) => s.track && s.track.stop());
         pcRef.current.close();
         pcRef.current = null;
       }

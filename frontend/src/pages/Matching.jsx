@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 const Matching = ({ socket, onMatched }) => {
   const hasRequestedMatch = useRef(false);
+  const retryTimeoutRef = useRef(null);
   const [dots, setDots] = useState("");
 
   /* 🔁 UI animation */
@@ -13,50 +14,59 @@ const Matching = ({ socket, onMatched }) => {
     return () => clearInterval(interval);
   }, []);
 
-  /* 🔌 MATCHING LOGIC */
+  /* 🔌 MATCHING LOGIC (STRICTMODE + SAFE) */
   useEffect(() => {
     if (!socket) return;
 
-    // 🔒 emit find_match only once
+    // ✅ emit find_match ONLY ONCE
     if (!hasRequestedMatch.current) {
-      socket.emit("find_match");
       hasRequestedMatch.current = true;
+      socket.emit("find_match");
       console.log("📤 find_match emitted");
     }
 
-    const handleMatchFound = (data) => {
-      if (!data || !data.matchId) {
-        console.warn("⚠️ match_found without matchId", data);
+    const handleMatchFound = ({ matchId, role }) => {
+      if (!matchId || !role) {
+        console.warn("⚠️ match_found invalid payload");
         return;
       }
-      onMatched(data.matchId);
-    };
 
-    // 🧹 SAFETY HANDLERS
-    const handlePartnerLeft = () => {
-      console.log("⚠️ partner_left while matching");
-      hasRequestedMatch.current = false;
-      socket.emit("find_match"); // retry safely
+      console.log("🎯 MATCH FOUND:", matchId, role);
+
+      // stop any pending retry
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+
+      onMatched({
+        matchId,
+        isCaller: role === "caller",
+      });
     };
 
     const handleTimeout = () => {
-      console.log("⏱️ match_timeout while matching");
-      hasRequestedMatch.current = false;
-      socket.emit("find_match");
+      console.log("⏱️ match_timeout → retry in 1s");
+
+      // allow retry but not immediately (avoid spam)
+      retryTimeoutRef.current = setTimeout(() => {
+        hasRequestedMatch.current = false;
+        socket.emit("find_match");
+      }, 1000);
     };
 
     socket.on("match_found", handleMatchFound);
-    socket.on("partner_left", handlePartnerLeft);
     socket.on("match_timeout", handleTimeout);
 
     return () => {
       socket.off("match_found", handleMatchFound);
-      socket.off("partner_left", handlePartnerLeft);
       socket.off("match_timeout", handleTimeout);
 
-      // 🔴 VERY IMPORTANT CLEANUP
-      hasRequestedMatch.current = false;
-      socket.emit("leave-room"); // safe no-op if not in room
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      // ❌ DO NOT reset hasRequestedMatch here
     };
   }, [socket, onMatched]);
 

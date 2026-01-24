@@ -1,11 +1,18 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ChatAudioController from "./ChatAudioController";
 
-const Chat = ({ socket, onEnd, matchId, mode }) => {
+const Chat = ({
+  socket,
+  onEnd,
+  matchId,
+  mode,
+  audioOn,        // 🔥 parent se
+  setAudioOn,     // 🔥 parent se
+  isCaller,       // 🔥 parent se
+}) => {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [audioOn, setAudioOn] = useState(false);
   const [partnerMuted, setPartnerMuted] = useState(false);
 
   const bottomRef = useRef(null);
@@ -17,19 +24,13 @@ const Chat = ({ socket, onEnd, matchId, mode }) => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  /* 🔽 JOIN / LEAVE ROOM */
-  useEffect(() => {
-    if (!socket || !matchId) return;
-    socket.emit("join-room", matchId);
-    return () => socket.emit("leave-room", matchId);
-  }, [socket, matchId]);
-
   /* 🔌 SOCKET EVENTS */
   useEffect(() => {
     if (!socket) return;
 
-    const handleReceive = (msg) =>
+    const handleReceive = (msg) => {
       setMessages((p) => [...p, { from: "partner", text: msg.text }]);
+    };
 
     const handleTyping = () => setIsTyping(true);
     const handleStopTyping = () => setIsTyping(false);
@@ -56,16 +57,15 @@ const Chat = ({ socket, onEnd, matchId, mode }) => {
     };
   }, [socket]);
 
-  /* 🔧 SINGLE EXIT */
+  /* ❌ SINGLE EXIT (CHAT + AUDIO SAFE) */
   const cleanupAndExit = () => {
     if (exitHandledRef.current) return;
     exitHandledRef.current = true;
 
     setMessages([]);
-    setAudioOn(false);
     setPartnerMuted(false);
 
-    socket.emit("leave-room", matchId);
+    setAudioOn(false); // 🔥 stop audio overlay
     onEnd();
   };
 
@@ -84,7 +84,8 @@ const Chat = ({ socket, onEnd, matchId, mode }) => {
       {/* HEADER */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10">
         <div className="text-sm">
-          🟢 Connected {mode === "audio" && "• Audio"}
+          🟢 Connected
+          {audioOn && <span className="ml-1">• Audio</span>}
           {partnerMuted && (
             <div className="text-xs opacity-60">🔇 Partner muted</div>
           )}
@@ -98,14 +99,16 @@ const Chat = ({ socket, onEnd, matchId, mode }) => {
         </button>
       </div>
 
-      {/* 🔊 AUDIO CONTROLLER (does NOT block chat) */}
-      <ChatAudioController
-        socket={socket}
-        matchId={matchId}
-        mode={mode}
-        audioOn={audioOn}
-        setAudioOn={setAudioOn}
-      />
+      {/* 🔊 AUDIO OVERLAY (ALWAYS ON TOP OF CHAT) */}
+      {audioOn && (
+        <ChatAudioController
+          socket={socket}
+          matchId={matchId}
+          audioOn={audioOn}
+          setAudioOn={setAudioOn}
+          isCaller={isCaller}
+        />
+      )}
 
       {/* 💬 CHAT MESSAGES */}
       <div
@@ -138,13 +141,15 @@ const Chat = ({ socket, onEnd, matchId, mode }) => {
       </div>
 
       {/* ⌨️ INPUT */}
-      <div className="
-        flex items-center gap-3
-        p-3
-        border-t
-        border-slate-200 dark:border-white/10
-        bg-white dark:bg-slate-900
-      ">
+      <div
+        className="
+          flex items-center gap-3
+          p-3
+          border-t
+          border-slate-200 dark:border-white/10
+          bg-white dark:bg-slate-900
+        "
+      >
         <input
           value={text}
           onChange={(e) => {
