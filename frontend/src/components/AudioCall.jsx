@@ -31,9 +31,9 @@ const AudioCall = ({
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, []);
+  },);
 
-  /* ❌ END CALL */
+  /*  END CALL */
   const handleEnd = () => {
     if (endedRef.current) return;
     endedRef.current = true;
@@ -94,7 +94,7 @@ const AudioCall = ({
           />
         )}
 
-        {/* 🔊 REMOTE AUDIO */}
+        {/* 🔊 REMOTE AUDIO  */}
         {remoteStream && (
           <audio ref={remoteAudioRef} autoPlay playsInline />
         )}
