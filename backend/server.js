@@ -95,32 +95,19 @@ function tryMatch() {
   io.sockets.sockets.get(caller)?.join(matchId);
   io.sockets.sockets.get(callee)?.join(matchId);
 
-  // 🔥 ALWAYS send role
-  io.to(caller).emit("match_found", {
-    matchId,
-    role: "caller",
-  });
+  io.to(caller).emit("match_found", { matchId, role: "caller" });
+  io.to(callee).emit("match_found", { matchId, role: "callee" });
 
-  io.to(callee).emit("match_found", {
-    matchId,
-    role: "callee",
-  });
+  // 🔥 SYNCED CALL START
+  const startTime = Date.now();
+  io.to(matchId).emit("call-started", { startTime });
 
-  // ❌ cancel match_timeout
-  if (matchTimeouts[caller]) {
-    clearTimeout(matchTimeouts[caller]);
-    delete matchTimeouts[caller];
-  }
-  if (matchTimeouts[callee]) {
-    clearTimeout(matchTimeouts[callee]);
-    delete matchTimeouts[callee];
-  }
-
-  // ⏱️ auto end after 10 min
+  // ⏱️ AUTO END AFTER 10 MIN
   matchTimers[matchId] = setTimeout(() => {
     endMatch(caller, "timeout");
   }, 10 * 60 * 1000);
 }
+
 
 /* 🔌 SOCKET */
 io.on("connection", (socket) => {

@@ -192,3 +192,18 @@ MERN Stack Developer
 ---
 
 
+components/
+ ├─ AudioCall.jsx
+ ├─ Header.jsx
+ ├─ StatBar.jsx
+
+pages/
+ ├─ Home.jsx
+ ├─ Matching.jsx
+ ├─ MatchFound.jsx
+ ├─ Chat.jsx
+ ├─ ChatAudioController.jsx
+
+hooks/
+ ├─ useWebRTC.js
+ ├─ useWebVoiceActivity.jsx

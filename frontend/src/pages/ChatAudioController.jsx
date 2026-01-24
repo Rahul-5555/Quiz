@@ -21,22 +21,8 @@ const ChatAudioController = ({
     if (startedRef.current) return;
 
     startedRef.current = true;
-    console.log("🎤 Caller starting WebRTC");
     startCall();
   }, [audioOn, isCaller, startCall]);
-
-  /* 🔔 SERVER END */
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleEnd = () => {
-      setAudioOn(false);
-      startedRef.current = false;
-    };
-
-    socket.on("call-ended", handleEnd);
-    return () => socket.off("call-ended", handleEnd);
-  }, [socket, setAudioOn]);
 
   if (!audioOn) return null;
 
@@ -44,7 +30,7 @@ const ChatAudioController = ({
     <AudioCall
       {...webrtc}
       onEnd={() => {
-        endCall();
+        endCall(true);     // self end
         setAudioOn(false);
         startedRef.current = false;
       }}

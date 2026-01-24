@@ -12,26 +12,14 @@ const AudioCall = ({
   onEnd,
 }) => {
   const { isSpeaking } = useVoiceActivity(localStream);
+
   const [timeLeft, setTimeLeft] = useState(CALL_DURATION);
 
   const endedRef = useRef(false);
   const timerRef = useRef(null);
   const remoteAudioRef = useRef(null);
 
-  /* 🔄 RESET WHEN STREAM CHANGES (NEW CALL) */
-  useEffect(() => {
-    endedRef.current = false;
-    setTimeLeft(CALL_DURATION);
-  }, [localStream]);
-
-  /* ❌ END CALL (SAFE) */
-  const handleEnd = useCallback(() => {
-    if (endedRef.current) return;
-    endedRef.current = true;
-    onEnd?.();
-  }, [onEnd]);
-
-  /* ⏱ TIMER (FIXED) */
+  /* ⏱️ START TIMER ON MOUNT */
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -49,18 +37,26 @@ const AudioCall = ({
         timerRef.current = null;
       }
     };
-  }, [handleEnd]);
+  }, []);
 
-  /* 🔊 ATTACH REMOTE AUDIO */
+  /* ❌ SAFE END */
+  const handleEnd = useCallback(() => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    onEnd?.();
+  }, [onEnd]);
+
+  /* 🔊 REMOTE AUDIO */
   useEffect(() => {
     if (remoteAudioRef.current && remoteStream) {
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current
-        .play()
-        .then(() => console.log("🔊 Remote audio playing"))
-        .catch(() =>
-          console.warn("⚠️ Autoplay blocked (needs user interaction)")
-        );
+      remoteAudioRef.current.play().catch(() => { });
     }
   }, [remoteStream]);
 
@@ -70,16 +66,25 @@ const AudioCall = ({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const isEndingSoon = timeLeft <= 30;
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white">
       <div className="w-[92%] max-w-sm rounded-3xl bg-white/5 p-6 flex flex-col items-center gap-6">
 
         <h2 className="text-lg font-semibold">🔊 Audio Call</h2>
 
-        <div className="text-4xl font-bold text-yellow-400">
+        {/* ⏱️ TIMER */}
+        <div
+          className={`text-4xl font-bold ${isEndingSoon
+            ? "text-red-400 animate-pulse"
+            : "text-yellow-400"
+            }`}
+        >
           {formatTime(timeLeft)}
         </div>
 
+        {/* 🎙️ SPEAKING INDICATOR */}
         <div
           className={`px-4 py-1 rounded-full text-sm ${isSpeaking
             ? "bg-green-500/20 text-green-400 animate-pulse"
@@ -95,7 +100,7 @@ const AudioCall = ({
           </span>
         )}
 
-        {/* 🎤 LOCAL AUDIO (muted) */}
+        {/* 🎤 LOCAL AUDIO */}
         {localStream && (
           <audio
             autoPlay
@@ -106,16 +111,14 @@ const AudioCall = ({
         )}
 
         {/* 🔊 REMOTE AUDIO */}
-        {remoteStream && (
-          <audio ref={remoteAudioRef} autoPlay playsInline />
-        )}
+        <audio ref={remoteAudioRef} autoPlay playsInline />
 
+        {/* 🎛️ CONTROLS */}
         <div className="flex gap-6 mt-4">
           <button
             onClick={toggleMute}
             disabled={!isMicReady}
-            className={`w-14 h-14 rounded-full ${isMicReady ? "bg-slate-700" : "bg-slate-700/50"
-              }`}
+            className="w-14 h-14 rounded-full bg-slate-700"
           >
             {isMuted ? "🔈" : "🔇"}
           </button>
