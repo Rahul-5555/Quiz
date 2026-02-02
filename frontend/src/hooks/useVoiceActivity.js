@@ -1,72 +1,89 @@
 import { useEffect, useRef, useState } from "react";
 
-const SILENCE_TIME = 800;
+const DEFAULTS = {
+  silenceTime: 800,
+  smoothing: 0.95,
+  sensitivity: 2.2,
+  fftSize: 1024,
+};
 
-const useVoiceActivity = (stream) => {
+const useVoiceActivity = (stream, options = {}) => {
+  const {
+    silenceTime,
+    smoothing,
+    sensitivity,
+    fftSize,
+  } = { ...DEFAULTS, ...options };
+
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
-  const silenceTimerRef = useRef(null);
   const rafRef = useRef(null);
+  const silenceTimerRef = useRef(null);
   const lastStateRef = useRef(false);
-  const noiseFloorRef = useRef(0.01); // adaptive baseline
+  const noiseFloorRef = useRef(0.01);
 
   useEffect(() => {
     if (!stream) return;
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioCtxRef.current = audioCtx;
+    let cancelled = false;
 
-    const resumeContext = async () => {
-      if (audioCtx.state === "suspended") {
-        try {
-          await audioCtx.resume();
-        } catch { }
-      }
-    };
-    resumeContext();
+    const audioCtx = new (window.AudioContext ||
+      window.webkitAudioContext)();
+    audioCtxRef.current = audioCtx;
 
     const source = audioCtx.createMediaStreamSource(stream);
     const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-
-    const data = new Uint8Array(analyser.fftSize);
+    analyser.fftSize = fftSize;
     source.connect(analyser);
-
     analyserRef.current = analyser;
 
+    const buffer = new Uint8Array(analyser.fftSize);
+
+    const resumeAudio = async () => {
+      if (audioCtx.state === "suspended") {
+        try {
+          await audioCtx.resume();
+        } catch (err) {
+          console.warn("AudioContext resume failed", err);
+        }
+      }
+    };
+    resumeAudio();
+
     const detect = () => {
-      analyser.getByteTimeDomainData(data);
+      if (cancelled) return;
+
+      analyser.getByteTimeDomainData(buffer);
 
       let sum = 0;
-      for (let i = 0; i < data.length; i++) {
-        const v = (data[i] - 128) / 128;
+      for (let i = 0; i < buffer.length; i++) {
+        const v = (buffer[i] - 128) / 128;
         sum += v * v;
       }
-      const rms = Math.sqrt(sum / data.length);
 
-      // 🔥 adaptive threshold
+      const rms = Math.sqrt(sum / buffer.length);
+
+      // 🎯 adaptive noise floor
       noiseFloorRef.current =
-        noiseFloorRef.current * 0.95 + rms * 0.05;
+        noiseFloorRef.current * smoothing + rms * (1 - smoothing);
 
-      const threshold = noiseFloorRef.current * 2.2;
+      const threshold = noiseFloorRef.current * sensitivity;
       const speaking = rms > threshold;
 
       if (speaking !== lastStateRef.current) {
         lastStateRef.current = speaking;
 
         if (speaking) {
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
           setIsSpeaking(true);
         } else {
           silenceTimerRef.current = setTimeout(() => {
             setIsSpeaking(false);
             silenceTimerRef.current = null;
-          }, SILENCE_TIME);
+          }, silenceTime);
         }
       }
 
@@ -76,11 +93,14 @@ const useVoiceActivity = (stream) => {
     detect();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(rafRef.current);
       clearTimeout(silenceTimerRef.current);
+      analyser.disconnect();
+      source.disconnect();
       audioCtx.close();
     };
-  }, [stream]);
+  }, [stream, silenceTime, smoothing, sensitivity, fftSize]);
 
   return { isSpeaking };
 };
