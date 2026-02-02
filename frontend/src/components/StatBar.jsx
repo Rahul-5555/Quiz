@@ -1,18 +1,50 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-const StatBar = ({ socket }) => {
+const StatBar = ({
+  socket,
+  status = "matching", // matching | idle | connected
+}) => {
   const [online, setOnline] = useState(0);
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleOnlineCount = (count) => setOnline(count);
+    const handleOnlineCount = (count) => {
+      // prevent unnecessary re-render
+      if (count !== prevCountRef.current) {
+        prevCountRef.current = count;
+        setOnline(count);
+      }
+    };
 
     socket.on("online_count", handleOnlineCount);
     socket.emit("get_online_count");
 
-    return () => socket.off("online_count", handleOnlineCount);
+    return () => {
+      socket.off("online_count", handleOnlineCount);
+    };
   }, [socket]);
+
+  const STATUS_MAP = {
+    matching: {
+      text: "Matching…",
+      color: "bg-red-500",
+      animate: "animate-pulse",
+    },
+    connected: {
+      text: "Connected",
+      color: "bg-green-500",
+      animate: "",
+    },
+    idle: {
+      text: "Idle",
+      color: "bg-yellow-500",
+      animate: "animate-pulse",
+    },
+  };
+
+  const currentStatus = STATUS_MAP[status];
 
   return (
     <div
@@ -25,6 +57,7 @@ const StatBar = ({ socket }) => {
         bg-white/80 dark:bg-white/5
         border border-slate-200 dark:border-white/10
         shadow-sm dark:shadow-lg
+        transition-all
       "
     >
       {/* 👥 ONLINE COUNT */}
@@ -33,15 +66,17 @@ const StatBar = ({ socket }) => {
           <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-60 animate-ping" />
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
         </span>
-        <span>{online} Online</span>
+        <span>{online.toLocaleString()} Online</span>
       </div>
 
-      {/* 🔴 MATCHING STATUS */}
+      {/* 🔵 STATUS */}
       <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-white/70">
         <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 animate-pulse" />
+          <span
+            className={`absolute inline-flex h-full w-full rounded-full ${currentStatus.color} ${currentStatus.animate}`}
+          />
         </span>
-        Matching…
+        {currentStatus.text}
       </div>
     </div>
   );
